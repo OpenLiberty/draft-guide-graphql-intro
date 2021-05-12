@@ -9,16 +9,16 @@
 :projectid: graphql-intro
 :page-layout: guide-multipane
 :page-duration: 25 minutes
-:page-releasedate: 2021-02-28
+:page-releasedate: 2021-04-28
 :page-essential: false
-:page-description: Learn how to create and test a GraphQL service using MicroProfile GraphQL and Open Liberty.
+:page-description: Learn how to add a GraphQL endpoint to an application using MicroProfile GraphQL and Open Liberty.
 :page-tags: ['MicroProfile', 'Jakarta EE']
 :page-related-guides: ['rest-intro', 'jpa-intro', 'mongodb-intro']
 :page-permalink: /guides/{projectid}
 :common-includes: https://raw.githubusercontent.com/OpenLiberty/guides-common/master
 :source-highlighter: prettify
 :page-seo-title: Accessing and manipulating data using MicroProfile GraphQL in Open Liberty
-:page-seo-description: Learn how to create an application that manipulates and returns data using the GraphQL query language implemented through MicroProfile GraphQL
+:page-seo-description: Learn how to add a GraphQL endpoint and use the GraphQL query language as implemented using Microprofile GraphQL
 :guide-author: Open Liberty
 = Accessing and manipulating data with GraphQL
 
@@ -30,16 +30,22 @@ Explore how to use GraphQL to access and manipulate data using MicroProfile Grap
 
 == What you'll learn
 
-You will learn how to build and test a simple GraphQL service with MicroProfile GraphQL. 
+You will learn how to add a GraphQL endpoint to an application using Microprofile GraphQL.
 
 GraphQL is an open source data query language. 
+It provides another method to interact with your application. 
 Unlike REST APIs, each `POST` request that is sent to a GraphQL service goes to a single HTTP endpoint.
-Create, read, update, and delete (CRUD) operations and their details are differentiated by the contents of the request.
-If the operation returns data, the user specifies what properties of the data that they want returned. 
-For read operations, a JSON object is returned that contains only the data and properties that are specified.
-For other operations, a JSON object might be returned containing information such as a success message. 
+Each request's body will determine what kind of operation will be performed and its parameters. 
+The kinds of operations this guide will cover are `query` and `mutation` operations.
 
-The returning of only the specified properties in a read operation is beneficial when you deal 
+The `query` operation type in GraphQL is a read-only operation.
+The `mutation` operation type in GraphQL can be used for create, update, or delete operations. 
+Each type of operation accepts input variables through the `POST` request's body.
+
+If any operation returns data, the user must also specify what properties of the data that they want returned in the request body. 
+GraphQL will then return only the properties requested.
+
+The returning of only the specified properties is beneficial when you deal 
 with large resources or resources that contain properties that are expensive to calculate. 
 By returning only the requested properties, GraphQL reduces the size of the responses. 
 For resources that contain properties that are expensive to calculate, such as other nested resources, 
@@ -47,15 +53,17 @@ GraphQL reduces processing time by calculating them only if requested.
 
 You can learn more about GraphQL at the https://graphql.org/[GraphQL website^].
 
-The service that you'll create will respond to requests that are made to the `\http://localhost:9080/graphql` URL. 
-The operations that you'll implement will be a simple `query` operation and a `mutation` operation.
-The `query` operation will return system information.
-The `mutation` operation will save a note of your choice into the system information. 
+You'll start with a service that responds to `GET` requests at the `\http://localhost:9080/system/properties` URL
+with all of your system information. 
+We'll add a GraphQL endpoint at the `\http://localhost:9080/graphql` URL. 
+It will allow for two basic GraphQL operations - a `query` operation and a `mutation` operation.
 
-Manual testing of the application will be done by using https://github.com/graphql/graphiql/tree/main/packages/graphiql[GraphiQL^], which is included in the project.
+Manual testing of the application can be done by using 
+https://github.com/graphql/graphiql/tree/main/packages/graphiql[GraphiQL^], which is included in the project for you. 
 GraphiQL is a webpage that allows you to easily make requests to the GraphQL service and see the responses.
 In GraphiQL you need to type only the body of the request, which streamlines manual tests.
 You're also able to view a history of your previous requests and repeat any of them.
+GraphiQL will be available at the `\http://localhost:9080/graphiql.html` URL. 
 
 ///////////////////////////
 // Getting started
@@ -70,9 +78,11 @@ include::{common-includes}/gitclone.adoc[]
 [role='command']
 include::{common-includes}/twyb-intro.adoc[]
 
+All examples in the guide will be done using GraphiQL. 
+The result will be the same as if you made an HTTP request using a method such as `curl`.
 Access the application through GraphiQL at the http://localhost:9080/graphiql.html[^] URL.
 
-Enter the following `query` operation into the input box. 
+Enter the following GraphQL `query` operation into the input box. 
 
 [role='command']
 ----
@@ -83,7 +93,8 @@ query {
 }
 ----
 
-Press `CTRL+enter` to run your `query` operation and generate output that is similar to the following example:
+Press `CTRL+enter` to run your `query` operation.
+Look for output that is similar to the following:
 
 [role='no_copy']
 ----
@@ -95,6 +106,24 @@ Press `CTRL+enter` to run your `query` operation and generate output that is sim
   }
 }
 ----
+
+The same output can be seen if you make a `POST` request to the `\http://localhost:9080/graphql` URL. 
+Try it out by running the following `curl` command:
+
+[role='command']
+----
+curl -X POST \
+     -H "Content-Type: application/json" \
+     -d '{ "query": "query { system { username } }" }' \
+     http://localhost:9080/graphql
+----
+
+Then, access the application's REST endpoint at the http://localhost:9080/system/properties[^] URL.
+Look for the property named `user.name`.
+Note that it will match the `username` property from the previous GraphQL `query` operation.
+The `user.name` property maps to the `username` property in GraphQL. 
+Also, note that the JSON response from the GraphQL operation is much smaller, 
+containing only the `username` property that was requested.
 
 [role='command']
 include::{common-includes}/twyb-end.adoc[]
@@ -186,15 +215,15 @@ The `mutation` operation type can create, delete, or modify data.
 
 [role="code_command hotspot file=0" ,subs="quotes"]
 ----
-#Create the `SystemResource` class.#
-`src/main/java/io/openliberty/guides/graphql/SystemResource.java`
+#Create the `GraphQLEndpoint` class.#
+`src/main/java/io/openliberty/guides/graphql/GraphQLEndpoint.java`
 ----
 
-The resolvers are defined in the [hotspot file=0]`SystemResource.java` file.
+The resolvers are defined in the [hotspot file=0]`GraphQLEndpoint.java` file.
 The [hotspot=graphqlapi file=0]`@GraphQLApi` annotation enables GraphQL to use the methods that are defined in this class as resolvers. 
 
 The [hotspot=query file=0]`@Query` annotation maps functions to operations of the `query` type.
-This annotation maps the [hotspot=getSystemInfo file=0]`getSystemInfo()` function to handling `system` requests which retrieves the system information. 
+This annotation maps the [hotspot=getSystemInfo file=0]`getSystemInfo()` function to handling `system` requests, which retrieve the system information. 
 
 The [hotspot=mutation file=0]`@Mutation` annotation maps functions to operations of the `mutation` type.
 This annotation maps the [hotspot=editNoteFunction file=0]`editNote()` function to handling `editNote` operations. 
@@ -208,14 +237,15 @@ Descriptions aren't required, but it's good practice to include.
 The [hotspot=operatingSystemHeader hotspot=javaHeader file=0]`@Source` annotation is used to add properties to object types. 
 This annotation adds [hotspot=javaFunction file=0]`java` 
 and [hotspot=os file=0]`operatingSystem` object types as properties of the `system` object type.
-The [hotspot=operatingSystemHeader hotspot=javaHeader file=0]`@Source` annotation is used for any properties that are expensive to calculate or search for.
+The [hotspot=operatingSystemHeader hotspot=javaHeader file=0]`@Source` annotation is used for 
+any properties that are expensive to calculate or search for.
 These properties are calculated or searched for only if requested, which saves time and resources.
 
 // file 0
-SystemResource.java
+GraphQLEndpoint.java
 [source, java, linenums, role='code_column hide_tags=copyright']
 ----
-include::finish/src/main/java/io/openliberty/guides/graphql/SystemResource.java[]
+include::finish/src/main/java/io/openliberty/guides/graphql/GraphQLEndpoint.java[]
 ----
 
 == Enabling GraphQL
@@ -239,8 +269,9 @@ The Open Liberty server needs to be configured to support the GraphQL query lang
 `src/main/liberty/config/server.xml`
 ----
 
-The https://openliberty.io/docs/20.0.0.12/reference/feature/mpGraphQL-1.0.html[MicroProfile GraphQL^] ([hotspot=graphql file=1]`mpGraphQL-1.0`) feature
-that is added to the [hotspot file=1]`server.xml` enables the use of the GraphQL feature in OpenLiberty.
+The https://openliberty.io/docs/latest/reference/feature/mpGraphQL-1.0.html[MicroProfile GraphQL^] 
+([hotspot=graphql file=1]`mpGraphQL-1.0`) feature that is added to the [hotspot file=1]`server.xml` 
+enables the use of the GraphQL feature in OpenLiberty.
 
 // file 0
 pom.xml
@@ -318,7 +349,7 @@ mutation {
 }
 ----
 
-You receive a response containing the boolean `true` to let you know that the request was successfully processed.
+You receive a response containing the boolean `true` to inform you that the request was successfully processed.
 You can see the note that you added by running the following query operation.
 
 [role='command']
@@ -345,12 +376,31 @@ The response is similar to the following example:
 
 Notice that only the `note` property is returned, as it was the only property in the request. 
 
+You can also view the note at the http://localhost:9080/system/properties[^] URL. 
+Notice that the `note` property is changed here as well.
+You can also edit the note through the REST endpoint with a command such as the following:
+
+[role='command']
+----
+curl -X POST \
+     -H "Content-Type: text/plain" \
+     -d "Note edited with REST endpoint" \
+     http://localhost:9080/system/editNote
+----
+
+If you view the `note` again through either the REST endpoint or the GraphQL endpoint, 
+you see the change to the `note` is reflected either way.
+The same applies whether you change the `note` using GraphQL or the REST endpoint.
+
+GraphQL offers an alternative way to access the same application and data.
+However, all requests going to a single endpoint may be more convenient to use. 
+
 == Testing the application
 
 Manual tests can be done by using GraphiQL at the http://localhost:9080/graphiql.html[^] URL. 
 However, automated tests are a better approach because they trigger a failure if a change introduces a bug.
 
-You can write tests by using JUnit to call the application server directly. 
+You can write tests by using JUnit to call the application server directly using GraphQL.
 
 [role="code_command hotspot file=0" ,subs="quotes"]
 ----
@@ -365,7 +415,7 @@ Each test is annotated with the [hotspot=test1 hotspot=test2 file=0]`@Test` anno
 The [hotspot=testGet file=0]`testGetSystem()` method makes a query using the `system` resolver through a `POST` request.
 JSON-B is used to parse the responses into Java objects.
 The test verifies that the response contains data, is responding to the correct operation, and is free of errors. 
-Then it checks the `username` property to ensure it is returned correctly.
+Then, it checks the `username` property to ensure it's returned correctly.
 
 The [hotspot=testEdit file=0]`testEditNote()` method makes a query using the `editNote` resolver.
 It will try to set the note to be the current system time and ensures the response says there were no problems with the operation.
